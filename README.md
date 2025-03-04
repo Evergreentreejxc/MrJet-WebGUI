@@ -32,17 +32,7 @@ This project integrates with the **Miyuki** (from [MissAV-Downloader](https://gi
    pip install -r requirements.txt
    ```
 
-3. **Set up Docker (Optional)**:
-   If you're using Docker, build and run the container:
-
-   ```bash
-   docker build -t video-downloader .
-   docker run -p 9000:8501 -v /path/to/your/movies:/app/movies_folder_miyuki video-downloader
-   ```
-
-   Replace `/path/to/your/movies` with the local directory where you'd like to save the videos.
-
-4. **Install ffmpeg**:
+3. **Install ffmpeg**:
    If not using Docker, make sure `ffmpeg` is installed on your system:
    - **macOS**: `brew install ffmpeg`
    - **Linux**: `sudo apt-get install ffmpeg`
@@ -57,7 +47,7 @@ This project integrates with the **Miyuki** (from [MissAV-Downloader](https://gi
    streamlit run main.py
    ```
 
-   Visit `http://localhost:8501` (or `http://localhost:9000` if using Docker) to open the interface.
+   Visit `http://localhost:8501`
 
 2. **Submit URLs**:
 
@@ -75,4 +65,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgements
 
-This project is based on the **Miyuki Engine** from the [MissAV-Downloader](https://github.com/MiyukiQAQ/MissAV-Downloader/) project.
+This project is based on the **Miyuki** from the [MissAV-Downloader](https://github.com/MiyukiQAQ/MissAV-Downloader/) project.
