@@ -5,7 +5,14 @@ import pandas as pd
 import os
 import uuid
 
-if 'download_queue' not in st.session_state:
+st.set_page_config(
+    page_title="Miyuki WebGUI",
+    page_icon="random",
+    layout="centered",
+    initial_sidebar_state="auto",
+)
+
+if "download_queue" not in st.session_state:
     st.session_state.download_queue = {}
 
 test_params = ["-ffmpeg", "-quality", "360", "-urls"]
@@ -34,7 +41,6 @@ def download_file(video_url_input):
         return ":green-background[Success]", f"[logfile](./app/static/{log_id}.log)"
     else:
         return ":red-background[Failed]", f"[logfile](./app/static/{log_id}.log)"
-
 
 st.title("Miyuki WebGUI")
 
