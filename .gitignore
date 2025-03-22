@@ -171,3 +171,5 @@ cython_debug/
 .pypirc
 
 .DS_Store
+movies_folder_miyuki/
+static/

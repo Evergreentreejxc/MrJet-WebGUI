@@ -19,8 +19,9 @@ test_params = ["-ffmpeg", "-quality", "360", "-urls"]
 prod_params = ["-ffmpeg", "-urls"]
 
 # create a temp dir
-if not os.path.exists("static"):
-    os.makedirs("static")
+static_dir = os.path.join(os.getcwd(), "static")
+if not os.path.exists(static_dir):
+    os.makedirs(static_dir)
 
 def download_file(video_url_input):
     movie_id = video_url_input.split("/")[-1]
@@ -34,13 +35,16 @@ def download_file(video_url_input):
     stdout, stderr = process.communicate()
     log_id = uuid.uuid4()
 
-    with open(f"static/{log_id}.log", "w") as f:
+    log_file_path = os.path.join(static_dir, f"{log_id}.log")
+    with open(log_file_path, "w") as f:
         f.write(stderr)
 
+    log_link = f"[logfile](./static/{log_id}.log)"
+
     if f"File integrity for {movie_id}: 100.00%" in stderr:
-        return ":green-background[Success]", f"[logfile](./app/static/{log_id}.log)"
+        return ":green-background[Success]", log_link
     else:
-        return ":red-background[Failed]", f"[logfile](./app/static/{log_id}.log)"
+        return ":red-background[Failed]", log_link
 
 st.title("Miyuki WebGUI")
 
@@ -93,6 +97,8 @@ if start_button:
 with st.expander("Utils", expanded=False, icon=None):
     clean_log = st.button("Clean log")
     if clean_log:
-        subprocess.Popen("rm -rf static/*.log", shell=True)
-        subprocess.Popen("> miyuki.log", shell=True)
-        subprocess.Popen("> downloaded_urls_miyuki.txt", shell=True)
+        subprocess.Popen(f"rm -rf {static_dir}/*.log", shell=True)
+        subprocess.Popen("rm ffmpeg_input_miyuki.txt", shell=True)
+        subprocess.Popen("rm miyuki.log", shell=True)
+        subprocess.Popen("rm tmp_movie_miyuki.html", shell=True)
+        subprocess.Popen("rm downloaded_urls_miyuki.txt", shell=True)
