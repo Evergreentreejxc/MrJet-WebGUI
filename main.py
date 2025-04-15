@@ -7,7 +7,7 @@ import uuid
 import json
 
 st.set_page_config(
-    page_title="Miyuki WebGUI",
+    page_title="MrJet WebGUI",
     page_icon="random",
     layout="centered",
     initial_sidebar_state="auto",
@@ -35,17 +35,16 @@ def save_queue(queue):
 if "download_queue" not in st.session_state:
     st.session_state.download_queue = load_queue()
 
-test_params = ["-ffmpeg", "-quality", "360", "-urls"]
-prod_params = ["-ffmpeg", "-urls"]
-
 
 def download_file(video_url_input):
     movie_id = video_url_input.split("/")[-1]
     log_id = uuid.uuid4()
     log_file_path = os.path.join(static_dir, f"{log_id}.log")
 
-    # 非阻塞执行命令，后台运行
-    command = " ".join(["miyuki", " ".join(prod_params), video_url_input])
+    command = " ".join(
+        ["mrjet", "--url", video_url_input, "--output_dir", "mrjet_output"]
+    )
+
     with open(log_file_path, "w") as log_file:
         subprocess.Popen(
             command, stdout=log_file, stderr=log_file, text=True, shell=True
@@ -64,44 +63,17 @@ def check_task_status(url, log_link):
     if os.path.exists(log_path):
         with open(log_path, "r") as f:
             content = f.read()
-            print(content)
             movie_id = url.split("/")[-1]
-            if f"File integrity for {movie_id}: 100.00%" in content:
+            if f"100%" in content:
                 return ":green-background[Success]", log_link
-            elif "Failed to fetch HTML for" in content:
+            elif "Error" in content:
                 return ":red-background[Failed]", log_link
     return ":orange-background[Downloading]", log_link
 
 
-def download_file_o(video_url_input):
-    movie_id = video_url_input.split("/")[-1]
-    command = " ".join(["miyuki", " ".join(prod_params), video_url_input])
-    process = subprocess.Popen(
-        f"{command}",
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        shell=True,
-    )
-    stdout, stderr = process.communicate()
-    log_id = uuid.uuid4()
-
-    log_file_path = os.path.join(static_dir, f"{log_id}.log")
-    with open(log_file_path, "w") as f:
-        f.write(stderr)
-
-    log_link = f"[logfile](./app/static/{log_id}.log)"
-
-    if f"File integrity for {movie_id}: 100.00%" in stderr:
-        return ":green-background[Success]", log_link
-    else:
-        return ":red-background[Failed]", log_link
-
-
-st.title("Miyuki WebGUI")
+st.title("MrJet WebGUI")
 
 input_col, add_col, start_col = st.columns((5, 1, 1))
-
 
 for url in list(st.session_state.download_queue.keys()):
     if st.session_state.download_queue[url]["Status"] in [
@@ -114,8 +86,8 @@ for url in list(st.session_state.download_queue.keys()):
         )
         st.session_state.download_queue[url]["Status"] = status
         st.session_state.download_queue[url]["Log"] = log
-save_queue(st.session_state.download_queue)
 
+save_queue(st.session_state.download_queue)
 
 queue_data = pd.DataFrame(
     columns=["URL", "Created Date", "Status", "Log"],
@@ -197,10 +169,7 @@ with st.expander("Utils", expanded=False, icon=None):
         for url in urls_to_remove:
             del st.session_state.download_queue[url]
 
-        subprocess.Popen("rm downloaded_urls_miyuki.txt", shell=True)
-        subprocess.Popen("rm ffmpeg_input_miyuki.txt", shell=True)
-        subprocess.Popen("rm tmp_movie_miyuki.html", shell=True)
-        subprocess.Popen("rm miyuki.log", shell=True)
+        # subprocess.Popen("rm miyuki.log", shell=True)
 
         save_queue(st.session_state.download_queue)
         table_placeholder.table(pd.DataFrame(st.session_state.download_queue.values()))

@@ -1,6 +1,6 @@
-# Video Downloader with Miyuki Engine
+# Video Downloader with MrJet Engine
 
-This project integrates with the **Miyuki** (from [MissAV-Downloader](https://github.com/MiyukiQAQ/MissAV-Downloader/)) to download videos from various sources. It allows you to input video URLs, queue them for download, and track the progress in real-time.
+This project integrates with the **MrJet** (from [MrJet](https://github.com/cailurus/mrjet)) to download videos from MissAV. It allows you to input video URLs, queue them for download, and track the progress in real-time.
 
 ## Features
 
@@ -11,8 +11,7 @@ This project integrates with the **Miyuki** (from [MissAV-Downloader](https://gi
 
 ## Requirements
 
-- Python 3.6 or higher
-- `ffmpeg` (installed via Docker or locally on your system)
+- Python 3.10 or higher
 - Docker (for containerization, optional)
 - `requirements.txt` dependencies
 
@@ -21,8 +20,8 @@ This project integrates with the **Miyuki** (from [MissAV-Downloader](https://gi
 1. **Clone the repository**:
 
    ```bash
-   git clone https://github.com/cailurus/Miyuki-WebGUI
-   cd Miyuki-WebGUI
+   git clone https://github.com/cailurus/MrJet-WebGUI
+   cd MrJet-WebGUI
    ```
 
 2. **Install dependencies**:
@@ -31,12 +30,6 @@ This project integrates with the **Miyuki** (from [MissAV-Downloader](https://gi
    ```bash
    pip install -r requirements.txt
    ```
-
-3. **Install ffmpeg**:
-   If not using Docker, make sure `ffmpeg` is installed on your system:
-   - **macOS**: `brew install ffmpeg`
-   - **Linux**: `sudo apt-get install ffmpeg`
-   - **Windows**: Download from [ffmpeg.org](https://ffmpeg.org/).
 
 ## Usage
 
@@ -62,7 +55,3 @@ This project integrates with the **Miyuki** (from [MissAV-Downloader](https://gi
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgements
-
-This project is based on the **Miyuki** from the [MissAV-Downloader](https://github.com/MiyukiQAQ/MissAV-Downloader/) project.
