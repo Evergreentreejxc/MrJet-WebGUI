@@ -20,7 +20,7 @@ This project integrates with the **MrJet** (from [MrJet](https://github.com/cail
 1. **Clone the repository**:
 
    ```bash
-   git clone https://github.com/cailurusEvergreentreejxc/MrJet-WebGUI
+   git clone https://github.com/Evergreentreejxc/MrJet-WebGUI
    cd MrJet-WebGUI
    ```
 
