@@ -1,4 +1,4 @@
-# main.py (Final Version with Batch Input Support)
+# main.py (Corrected Final Version)
 
 import subprocess
 import time
@@ -80,6 +80,7 @@ def check_task_status_and_progress(url, log_link):
             status, verify_p, download_p, build_p = ":green-background[Success]", 1.0, 1.0, 1.0
         elif "Error" in content or "ERROR:" in content:
             status = ":red-background[Failed]"
+
     except Exception as e:
         print(f"Error processing log file {log_path}: {e}")
         pass
@@ -89,13 +90,13 @@ def check_task_status_and_progress(url, log_link):
 # --- Streamlit 介面 ---
 st.title("MrJet WebGUI")
 
-# 【修改】更新輸入框的提示，告知用戶可以批量輸入
-st.text_area(
-    label="Enter one or more AV Numbers / URLs",
-    placeholder="You can enter multiple items, separated by commas, spaces, or newlines.\ne.g.,\nwaaa-361, ssis-001",
+# --- 【已修正】text_input 呼叫 ---
+# 移除了第一個多餘的參數 "url_input"，只保留 label 關鍵字參數
+st.text_input(
+    label="Enter URL or AV Number (e.g., waaa-361)",
+    placeholder="waaa-361",
     key="url_input_val"
 )
-
 
 add_col, start_col = st.columns((1, 5))
 with add_col:
@@ -110,10 +111,10 @@ for url, task in st.session_state.download_queue.items():
         st.session_state.download_queue[url].update({
             "Status": status, "Progress_Verify": p_v, "Progress_Download": p_d, "Progress_Build": p_b, "Log": log
         })
+
 save_queue(st.session_state.download_queue)
 
 # --- 佇列顯示 ---
-# (此部分無需修改)
 st.markdown("---")
 if not st.session_state.download_queue:
     st.info("The download queue is empty.")
@@ -123,56 +124,40 @@ else:
         main_cols[0].markdown(f'**ID:** [{task["DisplayName"]}]({url})')
         main_cols[1].text(f'Created: {task["Created Date"]}')
         main_cols[2].markdown(f'**{task["Status"]}** {task["Log"]}')
-        st.text("Verify:"); st.progress(task["Progress_Verify"])
-        st.text("Download:"); st.progress(task["Progress_Download"])
-        st.text("Build:"); st.progress(task["Progress_Build"])
+
+        st.text("Verify:")
+        st.progress(task["Progress_Verify"])
+        st.text("Download:")
+        st.progress(task["Progress_Download"])
+        st.text("Build:")
+        st.progress(task["Progress_Build"])
         st.markdown("---")
 
-# --- 【重大修改】按鈕邏輯，支援批量輸入 ---
+# --- 按鈕邏輯 ---
 if add_button and st.session_state.url_input_val:
-    raw_input = st.session_state.url_input_val
+    user_input = st.session_state.url_input_val.strip()
     
-    # 將逗號和換行符都替換為空格，方便後續用空格統一分割
-    normalized_input = raw_input.replace(',', ' ').replace('\n', ' ')
-    
-    # 按空格分割，並過濾掉因多個空格產生的空字串
-    items_to_add = [item.strip() for item in normalized_input.split(' ') if item.strip()]
-
-    added_count = 0
-    skipped_count = 0
-
-    for user_input in items_to_add:
-        if not user_input.startswith("http"):
-            full_url = f"{BASE_URL}{user_input}"
-            display_name = user_input
-        else:
-            full_url = user_input
-            display_name = user_input.split('/')[-1] or user_input
-            
-        if full_url not in st.session_state.download_queue:
-            st.session_state.download_queue[full_url] = {
-                "DisplayName": display_name,
-                "Created Date": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "Status": ":gray-background[Not Started]",
-                "Log": "",
-                "Progress_Verify": 0.0, "Progress_Download": 0.0, "Progress_Build": 0.0,
-            }
-            added_count += 1
-        else:
-            skipped_count += 1
-    
-    # 提供用戶操作回饋
-    if added_count > 0:
-        st.success(f"Successfully added {added_count} new item(s) to the queue.")
-    if skipped_count > 0:
-        st.warning(f"Skipped {skipped_count} item(s) that were already in the queue.")
-    
-    if added_count > 0:
+    if not user_input.startswith("http"):
+        full_url = f"{BASE_URL}{user_input}"
+        display_name = user_input
+    else:
+        full_url = user_input
+        display_name = user_input.split('/')[-1] or user_input
+        
+    if full_url not in st.session_state.download_queue:
+        st.session_state.download_queue[full_url] = {
+            "DisplayName": display_name,
+            "Created Date": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "Status": ":gray-background[Not Started]",
+            "Log": "",
+            "Progress_Verify": 0.0, "Progress_Download": 0.0, "Progress_Build": 0.0,
+        }
         save_queue(st.session_state.download_queue)
         st.rerun()
+    else:
+        st.warning("This item is already in the queue.")
 
-# --- 其他部分 (啟動、清理、自動刷新) ---
-# (此部分無需修改)
+# --- 其他部分 ---
 if start_button:
     for url, task in st.session_state.download_queue.items():
         if task["Status"] == ":gray-background[Not Started]":
