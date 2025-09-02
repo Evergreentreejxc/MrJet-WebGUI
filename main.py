@@ -1,4 +1,4 @@
-# main.py (Final Version with Batch Input Support)
+# main.py (Final Version with Batch Input and Duplication Check)
 
 import subprocess
 import time
@@ -8,8 +8,10 @@ import uuid
 import json
 import re
 
-# --- 基礎 URL 設定 ---
+# --- 基礎 URL 與路徑設定 ---
 BASE_URL = "https://missav.ws/"
+# 【新增】請在此處設定你的影片下載資料夾
+DOWNLOAD_DIR = "D:\IDM Download"
 
 # --- 基本設定 ---
 st.set_page_config(
@@ -38,11 +40,17 @@ def save_queue(queue):
 if "download_queue" not in st.session_state:
     st.session_state.download_queue = load_queue()
 
+# --- 【新增】核心輔助函式 ---
+def normalize_id(text):
+    """將輸入的字串轉為小寫並移除連字號，用於比對。"""
+    return text.lower().replace('-', '')
+
 # --- 核心功能函式 ---
 def download_file(video_url_input):
     log_id = uuid.uuid4()
     log_file_path = os.path.join(static_dir, f"{log_id}.log")
-    command = f"mrjet --url \"{video_url_input}\" --output_dir mrjet_output"
+    # 【修改】使用 DOWNLOAD_DIR 變數來構建指令
+    command = f"mrjet --url \"{video_url_input}\" --output_dir \"{DOWNLOAD_DIR}\""
     with open(log_file_path, "w", encoding='utf-8') as log_file:
         subprocess.Popen(
             command, stdout=log_file, stderr=subprocess.STDOUT, text=True, shell=True
@@ -89,13 +97,11 @@ def check_task_status_and_progress(url, log_link):
 # --- Streamlit 介面 ---
 st.title("MrJet WebGUI")
 
-# 【修改】更新輸入框的提示，告知用戶可以批量輸入
 st.text_area(
     label="Enter one or more AV Numbers / URLs",
     placeholder="You can enter multiple items, separated by commas, spaces, or newlines.\ne.g.,\nwaaa-361, ssis-001",
     key="url_input_val"
 )
-
 
 add_col, start_col = st.columns((1, 5))
 with add_col:
@@ -113,7 +119,6 @@ for url, task in st.session_state.download_queue.items():
 save_queue(st.session_state.download_queue)
 
 # --- 佇列顯示 ---
-# (此部分無需修改)
 st.markdown("---")
 if not st.session_state.download_queue:
     st.info("The download queue is empty.")
@@ -128,20 +133,39 @@ else:
         st.text("Build:"); st.progress(task["Progress_Build"])
         st.markdown("---")
 
-# --- 【重大修改】按鈕邏輯，支援批量輸入 ---
+# --- 【重大修改】按鈕邏輯，增加重複檔案檢查 ---
 if add_button and st.session_state.url_input_val:
     raw_input = st.session_state.url_input_val
     
-    # 將逗號和換行符都替換為空格，方便後續用空格統一分割
     normalized_input = raw_input.replace(',', ' ').replace('\n', ' ')
-    
-    # 按空格分割，並過濾掉因多個空格產生的空字串
     items_to_add = [item.strip() for item in normalized_input.split(' ') if item.strip()]
 
     added_count = 0
     skipped_count = 0
+    exist_count = 0
+    existing_files_list = []
+
+    # --- 新增：獲取目標資料夾中已存在的檔案列表（已標準化） ---
+    try:
+        if not os.path.isdir(DOWNLOAD_DIR):
+            st.error(f"Download directory not found: {DOWNLOAD_DIR}. Please create it or correct the path in the script.")
+            existing_filenames_normalized = []
+        else:
+            # 只檢查檔案，不檢查子資料夾
+            existing_filenames_normalized = [normalize_id(f) for f in os.listdir(DOWNLOAD_DIR) if os.path.isfile(os.path.join(DOWNLOAD_DIR, f))]
+    except Exception as e:
+        st.error(f"Error accessing download directory {DOWNLOAD_DIR}: {e}")
+        existing_filenames_normalized = []
+
 
     for user_input in items_to_add:
+        # --- 新增：檢查檔案是否已存在 ---
+        normalized_user_input = normalize_id(user_input)
+        if any(normalized_user_input in filename for filename in existing_filenames_normalized):
+            exist_count += 1
+            existing_files_list.append(user_input)
+            continue  # 跳過此項目，處理下一個
+
         if not user_input.startswith("http"):
             full_url = f"{BASE_URL}{user_input}"
             display_name = user_input
@@ -161,18 +185,19 @@ if add_button and st.session_state.url_input_val:
         else:
             skipped_count += 1
     
-    # 提供用戶操作回饋
+    # --- 修改：提供更詳細的用戶操作回饋 ---
     if added_count > 0:
         st.success(f"Successfully added {added_count} new item(s) to the queue.")
     if skipped_count > 0:
         st.warning(f"Skipped {skipped_count} item(s) that were already in the queue.")
+    if exist_count > 0:
+        st.error(f"Skipped {exist_count} item(s) because they may already exist in the target folder: {', '.join(existing_files_list)}")
     
     if added_count > 0:
         save_queue(st.session_state.download_queue)
         st.rerun()
 
 # --- 其他部分 (啟動、清理、自動刷新) ---
-# (此部分無需修改)
 if start_button:
     for url, task in st.session_state.download_queue.items():
         if task["Status"] == ":gray-background[Not Started]":
