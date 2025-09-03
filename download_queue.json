@@ -1,1 +1,20 @@
-{}
+{
+    "https://missav.ws/fc2-ppv-4751734": {
+        "DisplayName": "fc2-ppv-4751734",
+        "Created Date": "2025-09-04 01:07:31",
+        "Status": ":green-background[Completed]",
+        "Log": "[logfile](./app/static/9609fdf7-55bb-4216-9c24-697624b21483.log)",
+        "Progress_Verify": 1.0,
+        "Progress_Download": 1.0,
+        "Progress_Build": 1.0
+    },
+    "https://missav.ws/dm25/juq-505-chinese-subtitle": {
+        "DisplayName": "juq-505-chinese-subtitle",
+        "Created Date": "2025-09-04 01:07:31",
+        "Status": ":green-background[Completed]",
+        "Log": "[logfile](./app/static/ddc6f753-8195-44d9-846d-24796b9b2569.log)",
+        "Progress_Verify": 1.0,
+        "Progress_Download": 1.0,
+        "Progress_Build": 1.0
+    }
+}

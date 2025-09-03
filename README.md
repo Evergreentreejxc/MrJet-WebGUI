@@ -1,12 +1,9 @@
-
 [中文说明](README_zh.md)
 
 ---
-# MrJet WebGUI - A Batch Video Download Manager
+# MrJet WebGUI - An Enhanced Batch Video Download Manager
 
-This project provides a graphical web interface for the **MrJet** engine (from [cailurus/mrjet](https://github.com/cailurus/mrjet)), designed to streamline the process of downloading videos from MissAV. With this tool, you can easily batch-submit Video IDs, manage a download queue, and track the progress of each task in real-time.
-
-*(It is recommended to replace this text with a screenshot of your application's interface)*
+This project provides a graphical web interface for the **MrJet** engine (from [cailurus/mrjet](https://github.com/cailurus/mrjet)), designed to streamline the process of downloading videos from MissAV. With this tool, you can easily batch-submit Video IDs, manage a download queue, and enjoy a fully automated download and repair workflow.
 
 ## ✨ Core Features
 
@@ -14,7 +11,9 @@ This project provides a graphical web interface for the **MrJet** engine (from [
 -   **Powerful Batch Processing**: Submit multiple Video IDs or full URLs at once. Use commas, spaces, or newlines as delimiters.
 -   **Smart ID Recognition**: Simply enter a Video ID (e.g., `SSIS-001`), and the application will automatically construct the full download URL.
 -   **✅ Prevents Duplicate Downloads**: Before adding a new task, the tool automatically scans your designated download folder to prevent re-downloading files that already exist, saving you time and disk space.
--   **Real-Time Progress Tracking**: Each task in the queue has its own set of progress bars, clearly displaying the status of the `Verify`, `Download`, and `Build` stages.
+-   **Stable Sequential Downloading**: Processes one download at a time to prevent IP bans and system overload, significantly increasing success rates.
+-   **🤖 Automated Video Repair (FFmpeg Integration)**: Every completed video is **automatically** post-processed with FFmpeg (lossless remux). This permanently solves the common issue where videos built by `mrjet` **cannot be seeked** (i.e., dragging the progress bar doesn't work), ensuring every file is perfectly playable.
+-   **Robust Progress Tracking**: Fixes the issue where tasks could get stuck at 99%. The application now monitors both the log file and the `mrjet` process itself for accurate completion detection.
 -   **Comprehensive Queue Management**:
     -   **Add Tasks**: Add new items to the download queue.
     -   **Start All**: Begin all tasks currently marked as "Not Started" with a single click.
@@ -25,6 +24,7 @@ This project provides a graphical web interface for the **MrJet** engine (from [
 
 -   Python 3.10 or higher.
 -   **MrJet**: The core engine must be installed and executable from your system's terminal or command prompt.
+-   **FFmpeg**: Must be installed and accessible from your system's PATH. It is used for the automated video repair feature.
 -   All Python packages listed in `requirements.txt`.
 
 ## 🚀 Installation & Setup
@@ -32,18 +32,23 @@ This project provides a graphical web interface for the **MrJet** engine (from [
 1.  **Install the MrJet Core Engine**:
     First, you must follow the [official MrJet guide](https://github.com/cailurus/mrjet) to install the engine. Ensure that the `mrjet` command is accessible in your system's environment path.
 
-2.  **Clone This Repository**:
+2.  **Install FFmpeg**:
+    -   Go to the [FFmpeg official download page](https://ffmpeg.org/download.html).
+    -   Download the appropriate version for your OS and extract it.
+    -   **[IMPORTANT]** Add the path to FFmpeg's `bin` folder to your system's **environment variables (PATH)**. This ensures the `ffmpeg` command can be run from any directory.
+
+3.  **Clone This Repository**:
     ```bash
     git clone https://github.com/Evergreentreejxc/MrJet-WebGUI
     cd MrJet-WebGUI
     ```
 
-3.  **Install Python Dependencies**:
+4.  **Install Python Dependencies**:
     ```bash
     pip install -r requirements.txt
     ```
 
-4.  **⚠️【IMPORTANT】Configure Your Download Path**:
+5.  **⚠️【IMPORTANT】Configure Your Download Path**:
     Open the `main.py` file. Locate the following line and change the path to your desired video storage directory.
     ```python
     # Set your video download folder here
@@ -66,11 +71,11 @@ This project provides a graphical web interface for the **MrJet** engine (from [
     -   Click the **"Add"** button. The application will check for duplicates and add valid items to the queue below.
 
 4.  **Start Downloading**:
-    -   Click the **"Start All Queued"** button to begin processing all tasks marked as "Not Started".
+    -   Click the **"Start All Queued"** button. Tasks in the queue will now be executed **one by one** automatically.
 
 5.  **Monitor and Manage**:
-    -   The interface will auto-refresh to show real-time progress.
-    -   Once tasks are finished (either successfully or failed), you can clear them by expanding the **"Utils"** section and clicking **"Clean finished tasks"**.
+    -   The interface will auto-refresh to show real-time progress, including new statuses like `Downloading`, `Fixing`, and `Completed`.
+    -   Once tasks are finished, you can clear them by expanding the **"Utils"** section and clicking **"Clean finished tasks"**.
 
 ## License
 
