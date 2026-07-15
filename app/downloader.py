@@ -246,6 +246,41 @@ def _patch_queue_url(queue: dict, old_url: str, new_url: str) -> None:
 # Stall detection
 # ---------------------------------------------------------------------------
 
+def _try_bind_cache(queue: dict, url: str, task: TaskDict) -> None:
+    """
+    Attempt to discover and bind the mrjet cache folder for the current task.
+
+    Called once per UI cycle while status is DOWNLOADING and CacheFolder is None.
+    The first call records the baseline snapshot; subsequent calls check for
+    a single new 10-char folder.
+    """
+    now = time.time()
+    last_check = task.get("_cache_check_time", 0)
+
+    if last_check == 0:
+        # First attempt — record baseline
+        update_task(queue, url, _cache_check_time=now,
+                    _cache_baseline=list(find_mrjet_cache_folders()))
+        return
+
+    # Wait at least 2 seconds between checks
+    if now - last_check < 2:
+        return
+
+    update_task(queue, url, _cache_check_time=now)
+    baseline = set(task.get("_cache_baseline", []))
+    current = set(find_mrjet_cache_folders())
+    new = current - baseline
+
+    if len(new) == 1:
+        folder = new.pop()
+        update_task(queue, url, CacheFolder=folder)
+        print(f"Async cache binding: {task['DisplayName']} -> {folder}")
+        # Clean up tracking keys
+        task.pop("_cache_check_time", None)
+        task.pop("_cache_baseline", None)
+
+
 def check_stall(task: TaskDict, current_progress: float) -> bool:
     """
     Return True when progress has not changed for more than *STALL_TIMEOUT*
@@ -278,6 +313,10 @@ def step_task(url: str, task: TaskDict, queue: dict) -> None:
 
         # Always update progress
         update_task(queue, url, Progress_Download=progress)
+
+        # ---- Async cache folder binding (non-blocking, retried each cycle) ----
+        if task.get("CacheFolder") is None:
+            _try_bind_cache(queue, url, task)
 
         # Track progress movement for stall detection
         if progress != task.get("LastProgressValue", -1.0):

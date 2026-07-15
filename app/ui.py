@@ -141,29 +141,20 @@ def render() -> None:
 # Shared launch logic
 # ---------------------------------------------------------------------------
 
-def _start_task(queue: dict, url: str, poll_attempts: int) -> None:
+def _start_task(queue: dict, url: str) -> None:
     """
-    Launch the task at *url*: start mrjet, poll for the cache folder, bind it.
+    Launch the task at *url*: start mrjet and set status to DOWNLOADING.
 
-    This is the single source of truth for *starting* a task, shared by both
-    the manual "Start next" button and the auto-start logic.
+    Cache folder binding happens asynchronously in step_task() on subsequent
+    UI cycles, so we never block the UI here.
     """
-    task = queue[url]
-    folders_before = set(find_mrjet_cache_folders())
-
     status_md, log_link = launch_mrjet(url)
     update_task(queue, url,
                 Status=status_md,
                 Log=log_link,
                 LastProgressTime=time.time(),
-                LastProgressValue=0.0)
-
-    new_folder = poll_for_cache_folder(folders_before, poll_attempts)
-    if new_folder:
-        update_task(queue, url, CacheFolder=new_folder)
-        print(f"Task {task['DisplayName']} bound to cache folder: {new_folder}")
-    else:
-        print(f"!! Cache folder binding failed for {task['DisplayName']}.")
+                LastProgressValue=0.0,
+                CacheFolder=None)
 
     save_queue(queue)
 
@@ -245,13 +236,7 @@ def _handle_start_next(queue: dict) -> None:
     task = queue[url]
     st.info(f"Starting task: {task['DisplayName']}")
 
-    _start_task(queue, url, CACHE_POLL_ATTEMPTS)
-
-    if queue[url].get("CacheFolder"):
-        st.success(f"Bound cache folder: {os.path.basename(queue[url]['CacheFolder'])}")
-    else:
-        st.error("Could not bind cache folder — auto-takeover may not work.")
-
+    _start_task(queue, url)
     st.rerun()
 
 
@@ -290,5 +275,5 @@ def _auto_start_next_if_idle(queue: dict) -> None:
     st.info(f"Queue idle — auto-starting next task: {task['DisplayName']}")
     time.sleep(AUTO_START_NOTICE_DELAY)
 
-    _start_task(queue, url, CACHE_POLL_ATTEMPTS_AUTO)
+    _start_task(queue, url)
     st.rerun()

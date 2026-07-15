@@ -1,1 +1,12 @@
-{}
+{
+    "https://missav.ai/NHDTC-200": {
+        "DisplayName": "NHDTC-200",
+        "Created Date": "2026-07-16 00:22:13",
+        "Status": ":red-background[Failed]",
+        "Log": "[logfile](./static/5c83ba47-6745-4520-8086-9572d729e730.log)",
+        "Progress_Download": 0.0,
+        "LastProgressValue": 0.0,
+        "LastProgressTime": 1784132535.373405,
+        "CacheFolder": null
+    }
+}
