@@ -15,10 +15,8 @@ import time
 import streamlit as st
 
 from app.config import (
-    BASE_URL,
     DOWNLOAD_DIR,
     STATIC_DIR,
-    QUEUE_FILE,
     Status,
     UI_REFRESH_DELAY,
     AUTO_START_NOTICE_DELAY,
