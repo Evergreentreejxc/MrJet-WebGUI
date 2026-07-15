@@ -1,86 +1,105 @@
+# MrJet WebGUI
+
+> An enhanced batch video download manager with a clean web interface, automated FFmpeg repair, and intelligent queue management.
+
 [中文说明](README_zh.md)
 
 ---
-# MrJet WebGUI - An Enhanced Batch Video Download Manager
 
-This project provides a graphical web interface for the **MrJet** engine (from [cailurus/mrjet](https://github.com/cailurus/mrjet)), designed to streamline the process of downloading videos from MissAV. With this tool, you can easily batch-submit Video IDs, manage a download queue, and enjoy a fully automated download and repair workflow.
+## ✨ Features
 
-## ✨ Core Features
+- **Modern Web Interface** — Built with Streamlit for an intuitive, responsive experience.
+- **Batch Submission** — Add multiple video IDs or URLs at once (comma, space, or newline delimiters).
+- **Smart ID Recognition** — Enter an ID like `SSIS-001` and the full URL is constructed automatically.
+- **Duplicate Prevention** — Scans your download folder before adding tasks to avoid re-downloads.
+- **Sequential Processing** — Downloads one file at a time to prevent IP bans and system overload.
+- **Automated Video Repair** — Every completed video is **losslessly remuxed** with FFmpeg (`-movflags faststart`), fixing seek issues in `mrjet` output.
+- **Intelligent Takeover** — When a download stalls near completion (≥95%), FFmpeg automatically merges cached segments so you don't lose progress.
+- **Robust Progress Tracking** — Monitors both log output and process state to prevent tasks getting stuck at 99%.
+- **Queue Management** — Add, start, clean, and monitor tasks in real-time.
+- **Per-Task Logging** — Each download generates a separate log file for easy diagnostics.
 
--   **User-Friendly Web Interface**: Built with Streamlit for intuitive operation, eliminating the need for complex command-line usage.
--   **Powerful Batch Processing**: Submit multiple Video IDs or full URLs at once. Use commas, spaces, or newlines as delimiters.
--   **Smart ID Recognition**: Simply enter a Video ID (e.g., `SSIS-001`), and the application will automatically construct the full download URL.
--   **✅ Prevents Duplicate Downloads**: Before adding a new task, the tool automatically scans your designated download folder to prevent re-downloading files that already exist, saving you time and disk space.
--   **Stable Sequential Downloading**: Processes one download at a time to prevent IP bans and system overload, significantly increasing success rates.
--   **🤖 Automated Video Repair (FFmpeg Integration)**: Every completed video is **automatically** post-processed with FFmpeg (lossless remux). This permanently solves the common issue where videos built by `mrjet` **cannot be seeked** (i.e., dragging the progress bar doesn't work), ensuring every file is perfectly playable.
--   **Robust Progress Tracking**: Fixes the issue where tasks could get stuck at 99%. The application now monitors both the log file and the `mrjet` process itself for accurate completion detection.
--   **Comprehensive Queue Management**:
-    -   **Add Tasks**: Add new items to the download queue.
-    -   **Start All**: Begin all tasks currently marked as "Not Started" with a single click.
-    -   **Clean Finished**: Quickly remove completed or failed tasks and their associated log files from the interface.
--   **Detailed Logging**: Every download task generates a separate log file, making it easy to diagnose issues if they arise.
+## 📦 Project Structure
+
+```
+MrJet-WebGUI/
+├── app/                          # Core application package
+│   ├── config.py                 # Centralized configuration & constants
+│   ├── queue_manager.py          # Persistent JSON queue (add/remove/save/load)
+│   ├── ffmpeg_utils.py           # Video repair & takeover via FFmpeg
+│   ├── downloader.py             # mrjet launch, progress monitor, stall detection
+│   └── ui.py                     # Streamlit UI & interaction handlers
+├── scripts/                      # Standalone helper utilities
+│   ├── merge.py                  # Merge video segments manually
+│   └── batch_mp4_ffmpeg_move.py  # Batch faststart + move to destination
+├── main.py                       # Entry point (3 lines)
+├── Dockerfile                    # Containerized deployment
+└── requirements.txt              # Python dependencies
+```
 
 ## 📋 Prerequisites
 
--   Python 3.10 or higher.
--   **MrJet**: The core engine must be installed and executable from your system's terminal or command prompt.
--   **FFmpeg**: Must be installed and accessible from your system's PATH. It is used for the automated video repair feature.
--   All Python packages listed in `requirements.txt`.
+- **Python 3.10+**
+- **[MrJet](https://github.com/cailurus/mrjet)** — The core download engine (install via `npm install -g @cailurus/mrjet` or follow the [official guide](https://github.com/cailurus/mrjet)).
+- **[FFmpeg](https://ffmpeg.org/download.html)** — Must be installed and available in your system PATH.
+- Python packages listed in `requirements.txt`.
 
-## 🚀 Installation & Setup
+## 🚀 Installation
 
-1.  **Install the MrJet Core Engine**:
-    First, you must follow the [official MrJet guide](https://github.com/cailurus/mrjet) to install the engine. Ensure that the `mrjet` command is accessible in your system's environment path.
+```bash
+# 1. Install MrJet core engine
+npm install -g @cailurus/mrjet
 
-2.  **Install FFmpeg**:
-    -   Go to the [FFmpeg official download page](https://ffmpeg.org/download.html).
-    -   Download the appropriate version for your OS and extract it.
-    -   **[IMPORTANT]** Add the path to FFmpeg's `bin` folder to your system's **environment variables (PATH)**. This ensures the `ffmpeg` command can be run from any directory.
+# 2. Install FFmpeg (download from ffmpeg.org, add bin/ to PATH)
 
-3.  **Clone This Repository**:
-    ```bash
-    git clone https://github.com/Evergreentreejxc/MrJet-WebGUI
-    cd MrJet-WebGUI
-    ```
+# 3. Clone the repository
+git clone https://github.com/Evergreentreejxc/MrJet-WebGUI
+cd MrJet-WebGUI
 
-4.  **Install Python Dependencies**:
-    ```bash
-    pip install -r requirements.txt
-    ```
+# 4. Install Python dependencies
+pip install -r requirements.txt
 
-5.  **⚠️【IMPORTANT】Configure Your Download Path**:
-    Open the `main.py` file. Locate the following line and change the path to your desired video storage directory.
-    ```python
-    # Set your video download folder here
-    DOWNLOAD_DIR = "D:\IDM Download" 
-    ```
+# 5. ⚠️ Configure your download directory
+#    Open app/config.py and set DOWNLOAD_DIR to your desired path
+```
 
 ## 💡 Usage
 
-1.  **Launch the Application**:
-    Run the following command in the project's root directory:
-    ```bash
-    streamlit run main.py
-    ```
+```bash
+streamlit run main.py
+```
 
-2.  **Open Your Browser**:
-    Navigate to the `Network URL` provided in the terminal output (usually `http://localhost:8501`).
+Open your browser to `http://localhost:8501`.
 
-3.  **Add Download Tasks**:
-    -   In the text area, enter one or more Video IDs (e.g., `waaa-361, ssis-001`) or full URLs.
-    -   Click the **"Add"** button. The application will check for duplicates and add valid items to the queue below.
+1. Enter video IDs or URLs in the text area (e.g., `waaa-361, ssis-001`).
+2. Click **Add** to queue them.
+3. Click **Start next queued task** to begin downloading.
+4. Watch real-time progress — the next task starts automatically when one finishes.
+5. Use **Utils → Clean finished tasks** to remove completed entries.
 
-4.  **Start Downloading**:
-    -   Click the **"Start All Queued"** button. Tasks in the queue will now be executed **one by one** automatically.
+## 🐳 Docker
 
-5.  **Monitor and Manage**:
-    -   The interface will auto-refresh to show real-time progress, including new statuses like `Downloading`, `Fixing`, and `Completed`.
-    -   Once tasks are finished, you can clear them by expanding the **"Utils"** section and clicking **"Clean finished tasks"**.
+```bash
+docker build -t mrjet-webgui .
+docker run -p 8501:8501 -v /path/to/downloads:/app/downloads mrjet-webgui
+```
 
-## License
+## 🛠️ Key Improvements Over v1
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+| Area | Before | After |
+|------|--------|-------|
+| Structure | Single 397-line `main.py` | Modular `app/` package (6 files) |
+| Code Duplication | Manual vs auto-start logic duplicated | Shared `_start_task()` helper |
+| Status Strings | Hardcoded everywhere | Centralized `Status` class in `config.py` |
+| Type Safety | No type hints | Full type annotations |
+| UI Blocking | `time.sleep()` blocking the UI | Non-blocking `st.rerun()` pattern |
+| Docker | No layer caching, no healthcheck | Optimized layers + HEALTHCHECK |
+| Requirements | Included non-PyPI `mrjet>=0.1.3` | Only PyPI packages listed |
 
-## Acknowledgements
+## 📄 License
 
--   A special thank you to [cailurus](https://github.com/cailurus) for developing the powerful `mrjet` download tool.
+MIT — see [LICENSE](LICENSE).
+
+## 🙏 Acknowledgements
+
+- [cailurus](https://github.com/cailurus) for the excellent `mrjet` download engine.
