@@ -13,7 +13,7 @@ import time
 import uuid
 from typing import Optional
 
-from app.config import DOWNLOAD_DIR, STATIC_DIR, BASE_URL
+from app.config import DOWNLOAD_DIR, STATIC_DIR, MISSAV_MIRRORS
 from app.config import STALL_TIMEOUT, STALL_PROGRESS_THRESHOLD
 from app.config import Status
 from app.queue_manager import TaskDict, update_task
@@ -29,19 +29,44 @@ def normalize_id(text: str) -> str:
     return text.lower().replace("-", "")
 
 
+def extract_video_id(user_input: str) -> str:
+    """
+    Extract just the video ID from any input form (URL or raw ID).
+
+    Examples:
+        'https://missav.ws/SSIS-001' -> 'SSIS-001'
+        'SSIS-001'                   -> 'SSIS-001'
+        'https://missav.ai/ssis-001' -> 'ssis-001'
+    """
+    if user_input.startswith("http"):
+        cleaned = user_input.split("#")[0].strip("/")
+        return cleaned.split("/")[-1] or user_input
+    return user_input.strip()
+
+
+def build_video_url(video_id: str, mirror_index: int = 0) -> str:
+    """
+    Build a full URL from *video_id* using the mirror at *mirror_index*.
+
+    Raises IndexError if *mirror_index* is out of range.
+    """
+    return f"{MISSAV_MIRRORS[mirror_index]}{video_id}"
+
+
 def parse_display_name(user_input: str) -> tuple[str, str]:
     """
     Given raw user input, return ``(full_url, display_name)``.
 
-    If the input is not a full URL, it is prefixed with *BASE_URL* and the
-    display name is the raw input.  Otherwise the last path segment is used.
+    If the input is not a full URL, it is prefixed with the **first** mirror
+    (missav.ai) and the display name is the raw input.  Otherwise the last
+    path segment is used.
     """
     if user_input.startswith("http"):
         cleaned = user_input.split("#")[0].strip("/")
         display = cleaned.split("/")[-1] or user_input
         return user_input, display
     else:
-        return f"{BASE_URL}{user_input}", user_input
+        return build_video_url(user_input), user_input
 
 
 # ---------------------------------------------------------------------------
@@ -172,6 +197,52 @@ def _parse_log_filename(log_link: str) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
+# Cloudflare / domain-block detection
+# ---------------------------------------------------------------------------
+
+def _check_cf_blocked(log_link: str) -> bool:
+    """
+    Read the mrjet log and return True if it looks like Cloudflare or a domain
+    block was the cause of failure (so we can auto-retry on a different mirror).
+    """
+    if not log_link:
+        return False
+    log_file = _parse_log_filename(log_link)
+    if log_file is None:
+        return False
+    log_path = os.path.join(STATIC_DIR, log_file)
+    if not os.path.exists(log_path):
+        return False
+    try:
+        with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read().lower()
+    except OSError:
+        return False
+
+    # Heuristics for Cloudflare / access-denied failures
+    indicators = [
+        "cloudflare",
+        "403",               # HTTP 403 Forbidden
+        "just a moment",     # Cloudflare challenge page title
+        "max retries reached",
+        "failed to fetch data",
+        "http status: 403",
+    ]
+    return any(indicator in content for indicator in indicators)
+
+
+def _patch_queue_url(queue: dict, old_url: str, new_url: str) -> None:
+    """
+    Replace a queue key *old_url* with *new_url*, preserving all task data.
+
+    This is necessary when we retry with a different mirror domain because the
+    URL itself is the dictionary key.
+    """
+    if old_url in queue and old_url != new_url:
+        queue[new_url] = queue.pop(old_url)
+
+
+# ---------------------------------------------------------------------------
 # Stall detection
 # ---------------------------------------------------------------------------
 
@@ -214,6 +285,21 @@ def step_task(url: str, task: TaskDict, queue: dict) -> None:
                         LastProgressValue=progress,
                         LastProgressTime=time.time())
 
+        # ---- Cloudflare / domain-block detection & mirror retry ----
+        if status == Status.FAILED and _check_cf_blocked(task.get("Log", "")):
+            mirror_idx = task.get("MirrorIndex", 0)
+            if mirror_idx + 1 < len(MISSAV_MIRRORS):
+                video_id = task.get("VideoID") or extract_video_id(url)
+                new_url = build_video_url(video_id, mirror_idx + 1)
+                print(f"CF blocked on mirror {mirror_idx} ({MISSAV_MIRRORS[mirror_idx]}), "
+                      f"retrying with mirror {mirror_idx + 1} ({MISSAV_MIRRORS[mirror_idx + 1]})")
+                update_task(queue, url,
+                            Status=Status.RETRYING,
+                            MirrorIndex=mirror_idx + 1)
+                return
+            else:
+                print(f"All {len(MISSAV_MIRRORS)} mirrors exhausted for {task['DisplayName']}.")
+
         # Stall check
         if check_stall(task, progress):
             print(f"Stall detected for {task['DisplayName']} – attempting takeover.")
@@ -243,6 +329,23 @@ def step_task(url: str, task: TaskDict, queue: dict) -> None:
         if status != Status.DOWNLOADING:
             update_task(queue, url, Status=status)
             return
+
+    # ------ RETRYING -> restart with new mirror URL ------
+    if current_status == Status.RETRYING:
+        mirror_idx = task.get("MirrorIndex", 1)
+        video_id = task.get("VideoID") or extract_video_id(url)
+        new_url = build_video_url(video_id, mirror_idx)
+
+        _patch_queue_url(queue, url, new_url)
+
+        status_md, log_link = launch_mrjet(new_url)
+        update_task(queue, new_url,
+                    Status=status_md,
+                    Log=log_link,
+                    LastProgressTime=time.time(),
+                    LastProgressValue=0.0)
+        print(f"Restarted {task['DisplayName']} on {MISSAV_MIRRORS[mirror_idx]}")
+        return
 
     # ------ SUCCESS -> FIXING ------
     if current_status == Status.SUCCESS:

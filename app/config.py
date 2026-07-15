@@ -10,11 +10,22 @@ import os
 # ============================================================
 # Paths
 # ============================================================
-BASE_URL: Final[str] = "https://missav.ws/"
 DOWNLOAD_DIR: Final[str] = r"D:\IDM Download\Adult video"
 PROJECT_ROOT: Final[str] = os.getcwd()
 STATIC_DIR: Final[str] = os.path.join(PROJECT_ROOT, "static")
 QUEUE_FILE: Final[str] = os.path.join(PROJECT_ROOT, "download_queue.json")
+
+# ============================================================
+# MissAV mirror domains (ordered by preference; tried in order)
+# When one domain is blocked by Cloudflare, the next is used.
+# ============================================================
+MISSAV_MIRRORS: Final[list[str]] = [
+    "https://missav.ai/",
+    "https://missav.com/",
+    "https://missav.ws/",
+    "https://missav.cc/",
+    "https://missav.net/",
+]
 
 # ============================================================
 # Timing (seconds)
@@ -41,6 +52,7 @@ class Status:
     TAKEOVER_FAILED: str = ":red-background[Takeover Failed]"
     CACHE_INVALID: str = ":red-background[Cache Invalid]"
     FIX_FAILED: str = ":red-background[Fix Failed]"
+    RETRYING: str = ":yellow-background[Retrying (mirror switch)]"
 
     # Set of statuses considered "finished" for cleanup
     FINISHED: frozenset = frozenset({
@@ -49,7 +61,7 @@ class Status:
     })
 
     # Set of statuses that are still active
-    ACTIVE: frozenset = frozenset({DOWNLOADING, NOT_STARTED})
+    ACTIVE: frozenset = frozenset({DOWNLOADING, NOT_STARTED, RETRYING})
 
 # ============================================================
 # Download progress thresholds
