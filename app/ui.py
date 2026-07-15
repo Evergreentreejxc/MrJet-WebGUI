@@ -34,12 +34,13 @@ from app.queue_manager import (
 )
 from app.downloader import (
     normalize_id,
-    parse_display_name,
+    extract_video_id,
+    build_video_url,
     launch_mrjet,
     launch_jable_download,
     step_task,
-    detect_platform,
 )
+from app.config import Platform
 
 
 # ---------------------------------------------------------------------------
@@ -79,10 +80,20 @@ def render() -> None:
     st.text_area(
         label="Enter one or more Video IDs / URLs",
         placeholder=(
-            "You can enter multiple items separated by commas, spaces or newlines.\n"
-            "e.g.,\nwaaa-361, ssis-001"
+            "Input video codes or full URLs.\n"
+            "Separate multiple items by commas, spaces, or newlines.\n"
+            "e.g. SSIS-001, waaa-361"
         ),
         key="url_input_val",
+    )
+
+    # Platform selector
+    platform_choice = st.radio(
+        "Platform",
+        options=[("Jable.tv (Mr. Banana)", Platform.JABLE), ("MissAV (mrjet)", Platform.MISSAV)],
+        format_func=lambda x: x[0],
+        horizontal=True,
+        key="platform_choice",
     )
 
     add_col, start_col = st.columns((1, 5))
@@ -207,12 +218,19 @@ def _handle_add(queue: dict) -> None:
             existing_names.append(check_name)
             continue
 
-        full_url, display_name, platform = parse_display_name(user_input)
+        # Use user-selected platform (from radio button)
+        selected_platform = st.session_state.platform_choice[1]
+        display_name = extract_video_id(user_input)
+        
+        if user_input.startswith("http"):
+            full_url = user_input
+        else:
+            full_url = build_video_url(display_name, selected_platform)
 
         if full_url not in queue:
             from app.queue_manager import create_task
             task = create_task(display_name, full_url)
-            task["Platform"] = platform
+            task["Platform"] = selected_platform
             queue[full_url] = task
             added += 1
         else:
