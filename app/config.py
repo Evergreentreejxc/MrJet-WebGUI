@@ -16,8 +16,15 @@ STATIC_DIR: Final[str] = os.path.join(PROJECT_ROOT, "static")
 QUEUE_FILE: Final[str] = os.path.join(PROJECT_ROOT, "download_queue.json")
 
 # ============================================================
-# MissAV mirror domains (ordered by preference; tried in order)
-# When one domain is blocked by Cloudflare, the next is used.
+# Supported platforms
+# ============================================================
+class Platform:
+    JABLE: str = "jable"       # jable.tv (Mr. Banana engine)
+    MISSAV: str = "missav"     # MissAV (legacy mrjet CLI)
+    ALL: list[str] = ["jable", "missav"]
+
+# ============================================================
+# MissAV mirror domains (ordered by preference)
 # ============================================================
 MISSAV_MIRRORS: Final[list[str]] = [
     "https://missav.ai/",
@@ -28,20 +35,24 @@ MISSAV_MIRRORS: Final[list[str]] = [
 ]
 
 # ============================================================
+# Jable.tv settings
+# ============================================================
+JABLE_BASE_URL: Final[str] = "https://jable.tv/videos/"
+
+# ============================================================
 # Timing (seconds)
 # ============================================================
-STALL_TIMEOUT: Final[int] = 30         # how long without progress before considering stalled
-CACHE_POLL_INTERVAL: Final[int] = 1    # seconds between cache-folder polls
-CACHE_POLL_ATTEMPTS: Final[int] = 60   # max polls when starting a task manually
-CACHE_POLL_ATTEMPTS_AUTO: Final[int] = 20  # max polls during auto-start
-UI_REFRESH_DELAY: Final[int] = 5       # delay between UI refreshes while downloading
-AUTO_START_NOTICE_DELAY: Final[int] = 2  # time to show notice before auto-start
+STALL_TIMEOUT: Final[int] = 30
+CACHE_POLL_INTERVAL: Final[int] = 1
+CACHE_POLL_ATTEMPTS: Final[int] = 60
+CACHE_POLL_ATTEMPTS_AUTO: Final[int] = 20
+UI_REFRESH_DELAY: Final[int] = 5
+AUTO_START_NOTICE_DELAY: Final[int] = 2
 
 # ============================================================
 # Task status constants
 # ============================================================
 class Status:
-    """Central source of truth for all task status markdown strings."""
     NOT_STARTED: str = ":gray-background[Not Started]"
     DOWNLOADING: str = ":orange-background[Downloading]"
     SUCCESS: str = ":green-background[Success]"
@@ -54,16 +65,14 @@ class Status:
     FIX_FAILED: str = ":red-background[Fix Failed]"
     RETRYING: str = ":yellow-background[Retrying (mirror switch)]"
 
-    # Set of statuses considered "finished" for cleanup
     FINISHED: frozenset = frozenset({
         COMPLETED, SUCCESS, FAILED, FAILED_LOG_MISSING,
         TAKEOVER_FAILED, CACHE_INVALID, FIX_FAILED,
     })
 
-    # Set of statuses that are still active
     ACTIVE: frozenset = frozenset({DOWNLOADING, NOT_STARTED, RETRYING})
 
 # ============================================================
 # Download progress thresholds
 # ============================================================
-STALL_PROGRESS_THRESHOLD: Final[float] = 0.95  # progress >= 95% before triggering takeover
+STALL_PROGRESS_THRESHOLD: Final[float] = 0.95

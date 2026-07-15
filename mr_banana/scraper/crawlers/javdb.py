@@ -1,0 +1,415 @@
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+from pathlib import Path
+from urllib.parse import quote_plus, urljoin, urlparse
+
+from mr_banana.utils.network import DEFAULT_USER_AGENT
+from ..text_utils import looks_generic_site_desc, normalize_code, normalize_release_date
+from ..types import CrawlResult, MediaInfo
+from .base import BaseCrawler
+
+
+@dataclass
+class JavdbConfig:
+    base_url: str = "https://javdb.com"
+    cookie: str = ""  # optional
+    request_delay_sec: float = 0.0
+    proxy_url: str = ""  # optional
+
+
+class JavdbCrawler(BaseCrawler):
+    """Scrape metadata from JavDB (non-Jable upstream source).
+
+    This is intentionally lightweight: search by code -> open detail page -> extract common fields.
+    """
+
+    name = "javdb"
+
+    def __init__(self, cfg: JavdbConfig | None = None, log_fn=None):
+        super().__init__(cfg=cfg or JavdbConfig(), log_fn=log_fn)
+
+    def _headers(self) -> dict[str, str]:
+        headers = {
+            "User-Agent": DEFAULT_USER_AGENT,
+            "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7,ja;q=0.6",
+        }
+        if self.cfg.cookie:
+            headers["Cookie"] = self.cfg.cookie
+        return headers
+
+    def _find_first_detail_url(self, html: str, code: str) -> str | None:
+        try:
+            from bs4 import BeautifulSoup  # type: ignore
+
+            soup = BeautifulSoup(html, "html.parser")
+            boxes = soup.select("a.box")
+            if not boxes:
+                return None
+
+            want = normalize_code(code)
+
+            # Prefer exact code match from the result card's UID (more reliable than title contains).
+            for a in boxes:
+                uid_el = a.select_one(".uid")
+                uid_txt = uid_el.get_text(" ", strip=True) if uid_el else ""
+                if uid_txt and want and normalize_code(uid_txt) == want:
+                    href = a.get("href")
+                    if href:
+                        return urljoin(self.cfg.base_url, href)
+
+            # Fallback: accept a title that contains the code.
+            for a in boxes:
+                title = (a.get_text(" ", strip=True) or "")
+                if want and want in normalize_code(title):
+                    href = a.get("href")
+                    if href:
+                        return urljoin(self.cfg.base_url, href)
+
+            href = boxes[0].get("href")
+            return urljoin(self.cfg.base_url, href) if href else None
+        except Exception:
+            return None
+
+    def _text_after_label(self, soup, labels: list[str]) -> str:
+        for lab in labels:
+            node = soup.find("strong", string=lambda s: isinstance(s, str) and lab in s)
+            if not node:
+                continue
+            parent = node.parent
+            if not parent:
+                continue
+            # common structure: <strong>xxx</strong> <span>...</span>
+            span = parent.find("span")
+            if span:
+                return span.get_text(" ", strip=True)
+            # fallback to parent text
+            text = parent.get_text(" ", strip=True)
+            if text:
+                return text
+        return ""
+
+    def _links_after_label(self, soup, labels: list[str]) -> list[str]:
+        for lab in labels:
+            node = soup.find("strong", string=lambda s: isinstance(s, str) and lab in s)
+            if not node:
+                continue
+            parent = node.parent
+            if not parent:
+                continue
+            span = parent.find("span")
+            scope = span or parent
+            links = [a.get_text(" ", strip=True) for a in scope.find_all("a")]
+            links = [x for x in links if x]
+            if links:
+                # stable de-dup
+                return list(dict.fromkeys(links))
+        return []
+
+    def _parse_detail(self, detail_url: str, html: str, code: str) -> CrawlResult | None:
+        from bs4 import BeautifulSoup  # type: ignore
+
+        soup = BeautifulSoup(html, "html.parser")
+
+        def pick_text(sel: str) -> str:
+            el = soup.select_one(sel)
+            return el.get_text(" ", strip=True) if el else ""
+
+        title = pick_text("h2.title strong.current-title") or pick_text("h2.title")
+        originaltitle = pick_text("h2.title span.origin-title")
+
+        # Validate that the detail page matches the requested code.
+        # JavDB search sometimes returns near matches; do not accept mismatched pages.
+        want = normalize_code(code)
+        page_code = ""
+        try:
+            raw_id = self._text_after_label(soup, ["識別碼:", "识别码:", "ID:", "品番:", "番号:", "番號:"])
+            if raw_id:
+                m = re.search(r"[A-Za-z0-9]+-[A-Za-z0-9]+", raw_id)
+                page_code = m.group(0) if m else raw_id
+        except Exception:
+            page_code = ""
+        if page_code and want and normalize_code(page_code) != want:
+            self._emit(f"skip detail: id mismatch want={code} got={page_code}")
+            return None
+
+        # cover
+        cover_url = ""
+        cover_el = soup.select_one("img.video-cover")
+        if cover_el and cover_el.get("src"):
+            cover_url = urljoin(self.cfg.base_url, cover_el.get("src"))
+
+        # actors/tags
+        actors = self._links_after_label(soup, ["演員:", "演员:", "Actors:"])
+        tags = self._links_after_label(soup, ["類別:", "类别:", "Tags:"])
+
+        # studio/publisher/series/release/runtime/directors
+        studio = ""
+        publisher = ""
+        series = ""
+        release = ""
+        runtime = ""
+        directors = []
+
+        studio = self._links_after_label(soup, ["片商:", "Maker:"])
+        studio = studio[0] if studio else ""
+        publisher = self._links_after_label(soup, ["發行:", "发行:", "Publisher:"])
+        publisher = publisher[0] if publisher else ""
+        series = self._links_after_label(soup, ["系列:", "Series:"])
+        series = series[0] if series else ""
+        release = self._text_after_label(soup, ["日期:", "Released Date:"]).strip()
+        runtime = self._text_after_label(soup, ["時長", "时长", "Duration:"])
+        directors = self._links_after_label(soup, ["導演:", "导演:", "Director:"])
+
+        # rating (best effort; DOM varies by locale)
+        rating = ""
+        try:
+            for sel in [
+                ".rating",
+                ".score",
+                ".score .value",
+                "span.rating",
+                "span.score",
+            ]:
+                el = soup.select_one(sel)
+                if not el:
+                    continue
+                txt = el.get_text(" ", strip=True)
+                m = re.search(r"([0-9]+(?:\.[0-9]+)?)", txt)
+                if m:
+                    rating = m.group(1)
+                    break
+        except Exception:
+            rating = ""
+
+        # normalize release to yyyy-mm-dd if possible
+        release_norm = normalize_release_date(release) if release else ""
+        release_norm = release_norm or release
+
+        # runtime minutes
+        runtime_min = ""
+        if runtime:
+            m = re.search(r"(\d+)", runtime)
+            runtime_min = m.group(1) if m else ""
+
+        # preview images
+        preview_urls: list[str] = []
+        for a in soup.select("div.preview-images a.tile-item"):
+            href = a.get("href")
+            if not href:
+                continue
+            preview_urls.append(urljoin(self.cfg.base_url, href))
+        preview_urls = list(dict.fromkeys(preview_urls))
+
+        # trailer
+        trailer_url = ""
+        src = soup.select_one("video#preview-video source")
+        if src and src.get("src"):
+            trailer_url = src.get("src")
+            if trailer_url.startswith("//"):
+                trailer_url = "https:" + trailer_url
+            else:
+                trailer_url = urljoin(self.cfg.base_url, trailer_url)
+
+        # poster url (often derivable from cover)
+        poster_url = ""
+        if cover_url and "/covers/" in cover_url:
+            poster_url = cover_url.replace("/covers/", "/thumbs/")
+
+        # plot / description (best effort)
+        plot = ""
+        for lab in ["簡介", "简介", "Description", "Storyline", "剧情", "劇情"]:
+            node = soup.find("strong", string=lambda s: isinstance(s, str) and lab in s)
+            if not node or not node.parent:
+                continue
+            txt = node.parent.get_text(" ", strip=True)
+            if not txt:
+                continue
+            lab_txt = node.get_text(" ", strip=True)
+            # Strip label prefix and common separators.
+            txt = txt.replace(lab_txt, "", 1).strip().lstrip(":：").strip()
+            if txt and len(txt) >= 10:
+                plot = txt
+                break
+
+        # NOTE: Do NOT fall back to meta description here.
+        # Many upstream sites use a generic site slogan for meta description,
+        # which would pollute plot and block other sources due to merge ordering.
+        if plot and looks_generic_site_desc(plot):
+            plot = ""
+
+        # Extract magnet links
+        magnet_links: list[dict[str, str]] = []
+        try:
+            # JavDB magnet links are in div#magnets-content or similar structure
+            # Each magnet item is typically a div with class containing 'item' or inside magnet-links
+            
+            # Method 1: Try magnets-content section
+            magnets_section = soup.select_one("#magnets-content, .magnet-links")
+            if magnets_section:
+                # Look for all anchor tags with magnet: hrefs
+                for magnet_a in magnets_section.select("a[href^='magnet:']"):
+                    magnet_url = magnet_a.get("href", "")
+                    if not magnet_url:
+                        continue
+                    
+                    # Find parent item container
+                    item_container = magnet_a.find_parent("div", class_=lambda c: c and ("item" in c or "columns" in c))
+                    if not item_container:
+                        item_container = magnet_a.find_parent("div")
+                    
+                    # Extract name from magnet-name span or the anchor text
+                    name = ""
+                    if item_container:
+                        name_el = item_container.select_one(".magnet-name span.name, .magnet-name, span.name, .name")
+                        if name_el:
+                            name = name_el.get_text(" ", strip=True)
+                    if not name:
+                        name = magnet_a.get_text(" ", strip=True) or code
+                    
+                    # Extract size from meta span
+                    size = ""
+                    if item_container:
+                        size_el = item_container.select_one(".meta, span.meta, .size")
+                        if size_el:
+                            size_text = size_el.get_text(" ", strip=True)
+                            size_match = re.search(r"(\d+(?:\.\d+)?\s*(?:GB|MB|TB))", size_text, re.IGNORECASE)
+                            if size_match:
+                                size = size_match.group(1)
+                    
+                    # Check for HD and subtitle tags
+                    is_hd = False
+                    has_subtitle = False
+                    if item_container:
+                        is_hd = bool(item_container.select_one(".tag.is-warning, .is-warning, [class*='hd']"))
+                        has_subtitle = bool(item_container.select_one(".tag.is-info, .is-info, [class*='subtitle'], [class*='字幕']"))
+                    
+                    magnet_links.append({
+                        "url": magnet_url,
+                        "name": name or code,
+                        "size": size,
+                        "is_hd": is_hd,
+                        "has_subtitle": has_subtitle,
+                    })
+            
+            # Method 2: Fallback - search all magnet links on page
+            if not magnet_links:
+                for magnet_a in soup.select("a[href^='magnet:']"):
+                    magnet_url = magnet_a.get("href", "")
+                    if not magnet_url:
+                        continue
+                    # Avoid duplicates
+                    if any(m["url"] == magnet_url for m in magnet_links):
+                        continue
+                    
+                    item_container = magnet_a.find_parent("div")
+                    name = magnet_a.get_text(" ", strip=True) or code
+                    
+                    size = ""
+                    if item_container:
+                        size_text = item_container.get_text(" ", strip=True)
+                        size_match = re.search(r"(\d+(?:\.\d+)?\s*(?:GB|MB|TB))", size_text, re.IGNORECASE)
+                        if size_match:
+                            size = size_match.group(1)
+                    
+                    magnet_links.append({
+                        "url": magnet_url,
+                        "name": name,
+                        "size": size,
+                        "is_hd": False,
+                        "has_subtitle": False,
+                    })
+            
+            # Deduplicate by URL
+            seen_urls = set()
+            unique_magnets = []
+            for m in magnet_links:
+                if m["url"] not in seen_urls:
+                    seen_urls.add(m["url"])
+                    unique_magnets.append(m)
+            magnet_links = unique_magnets
+            
+        except Exception as e:
+            self._emit(f"!! magnet extract error: {e}")
+
+        data = {
+            "number": code,
+            "originaltitle": originaltitle,
+            "studio": studio,
+            "publisher": publisher or studio,
+            "series": series,
+            "plot": plot,
+            "release": release_norm,
+            "runtime": runtime_min,
+            "directors": directors,
+            "actors": actors,
+            "tags": tags,
+            "cover_url": cover_url,
+            "poster_url": poster_url or cover_url,
+            "fanart_url": cover_url,
+            "preview_urls": preview_urls,
+            "trailer_url": trailer_url,
+            "magnet_links": magnet_links,
+        }
+
+        if rating:
+            data["rating"] = rating
+
+        return CrawlResult(
+            source=self.name,
+            title=title or code,
+            external_id=code,
+            original_url=detail_url,
+            data=data,
+        )
+
+    def crawl(self, file_path: Path, media: MediaInfo) -> CrawlResult | None:
+        code = self._extract_code(file_path)
+        if not code:
+            return None
+
+        search_url = f"{self.cfg.base_url}/search?q={quote_plus(code)}&locale=zh"
+        search_html = self._get_text(search_url)
+        if not search_html:
+            return None
+
+        detail_url = self._find_first_detail_url(search_html, code)
+        if not detail_url:
+            return None
+
+        detail_html = self._get_text(detail_url)
+        if not detail_html:
+            return None
+
+        return self._parse_detail(detail_url, detail_html, code)
+
+    def search_by_code(self, code: str) -> CrawlResult | None:
+        """Search by code directly without requiring a file path.
+        
+        Args:
+            code: The video code (e.g., 'ABC-123')
+            
+        Returns:
+            CrawlResult with metadata and magnet links, or None if not found
+        """
+        if not code:
+            return None
+        
+        # Normalize code
+        code = code.strip().upper()
+        
+        search_url = f"{self.cfg.base_url}/search?q={quote_plus(code)}&locale=zh"
+        search_html = self._get_text(search_url)
+        if not search_html:
+            return None
+
+        detail_url = self._find_first_detail_url(search_html, code)
+        if not detail_url:
+            return None
+
+        detail_html = self._get_text(detail_url)
+        if not detail_html:
+            return None
+
+        return self._parse_detail(detail_url, detail_html, code)

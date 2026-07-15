@@ -35,10 +35,10 @@ from app.queue_manager import (
 from app.downloader import (
     normalize_id,
     parse_display_name,
-    find_mrjet_cache_folders,
-    poll_for_cache_folder,
     launch_mrjet,
+    launch_jable_download,
     step_task,
+    detect_platform,
 )
 
 
@@ -143,20 +143,30 @@ def render() -> None:
 
 def _start_task(queue: dict, url: str) -> None:
     """
-    Launch the task at *url*: start mrjet and set status to DOWNLOADING.
-
-    Cache folder binding happens asynchronously in step_task() on subsequent
-    UI cycles, so we never block the UI here.
+    Launch the task at *url*.  Dispatches to Mr. Banana (Jable) or mrjet CLI
+    (MissAV) based on the task's Platform field.
     """
-    status_md, log_link = launch_mrjet(url)
-    update_task(queue, url,
-                Status=status_md,
-                Log=log_link,
-                LastProgressTime=time.time(),
-                LastProgressValue=0.0,
-                CacheFolder=None)
+    task = queue[url]
+    platform = task.get("Platform", "missav")
 
-    save_queue(queue)
+    if platform == "jable":
+        # Mr. Banana engine — async thread, progress via callback
+        update_task(queue, url,
+                    Status=Status.DOWNLOADING,
+                    LastProgressTime=time.time(),
+                    LastProgressValue=0.0)
+        save_queue(queue)
+        launch_jable_download(url, task, queue, url)
+    else:
+        # Legacy mrjet CLI
+        status_md, log_link = launch_mrjet(url)
+        update_task(queue, url,
+                    Status=status_md,
+                    Log=log_link,
+                    LastProgressTime=time.time(),
+                    LastProgressValue=0.0,
+                    CacheFolder=None)
+        save_queue(queue)
 
 
 # ---------------------------------------------------------------------------
@@ -197,11 +207,12 @@ def _handle_add(queue: dict) -> None:
             existing_names.append(check_name)
             continue
 
-        full_url, display_name = parse_display_name(user_input)
+        full_url, display_name, platform = parse_display_name(user_input)
 
         if full_url not in queue:
             from app.queue_manager import create_task
             task = create_task(display_name, full_url)
+            task["Platform"] = platform
             queue[full_url] = task
             added += 1
         else:
