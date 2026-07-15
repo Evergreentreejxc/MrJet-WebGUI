@@ -42,14 +42,18 @@ def extract_video_id(user_input: str) -> str:
 
 
 def detect_platform(user_input: str) -> str:
-    """Guess the platform from user input. Returns Platform.JABLE or Platform.MISSAV."""
+    """Guess the platform from user input. Returns Platform.JABLE or Platform.MISSAV.
+
+    - Full jable.tv URL → Jable
+    - Full missav.* URL → MissAV
+    - Bare code (e.g. 'SSIS-001') → default to MissAV (backward compatible)
+    """
     lowered = user_input.lower()
-    if "jable.tv" in lowered or (not user_input.startswith("http") and not re.match(r'^[a-z]+-\d+$', user_input, re.IGNORECASE)):
-        # Jable codes are purely numeric (e.g. '12345'), MissAV codes are alpha-numeric (e.g. 'SSIS-001')
-        if not user_input.startswith("http") and re.match(r'^\d+$', user_input.strip()):
-            return Platform.JABLE
-        if "jable.tv" in lowered:
-            return Platform.JABLE
+    if "jable.tv" in lowered:
+        return Platform.JABLE
+    if "missav" in lowered:
+        return Platform.MISSAV
+    # Bare code → MissAV (original behavior)
     return Platform.MISSAV
 
 

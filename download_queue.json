@@ -2,12 +2,14 @@
     "https://missav.ai/NHDTC-200": {
         "DisplayName": "NHDTC-200",
         "Created Date": "2026-07-16 00:30:00",
-        "Status": ":gray-background[Not Started]",
-        "Log": "",
+        "Status": ":red-background[Failed]",
+        "Log": "[logfile](./static/b293c1a0-1e63-4d6c-bb1f-bea0657b7774.log)",
         "Progress_Download": 0.0,
-        "LastProgressValue": -1.0,
-        "LastProgressTime": 0.0,
+        "LastProgressValue": 0.0,
+        "LastProgressTime": 1784134207.2404075,
         "CacheFolder": null,
-        "MirrorIndex": 0
+        "MirrorIndex": 0,
+        "_cache_check_time": 1784134222.4699318,
+        "_cache_baseline": []
     }
 }
